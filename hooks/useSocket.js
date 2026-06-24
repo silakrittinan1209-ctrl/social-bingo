@@ -3,17 +3,27 @@ import { useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 
 let socketInstance = null
+let socketUrl = null
 
 export function useSocket() {
   const [isConnected, setIsConnected] = useState(false)
   const socketRef = useRef(null)
 
   useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin
+
+    // Re-create socket if URL changed (e.g. switched from localhost to tunnel)
+    if (socketInstance && socketUrl !== url) {
+      socketInstance.disconnect()
+      socketInstance = null
+      socketUrl = null
+    }
+
     if (!socketInstance) {
-      const url = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin
+      socketUrl = url
       socketInstance = io(url, {
-        transports: ['polling', 'websocket'],
-        upgrade: true,
+        transports: ['polling'],
+        upgrade: false,
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionAttempts: 20,
