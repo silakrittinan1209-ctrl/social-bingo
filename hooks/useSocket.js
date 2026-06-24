@@ -12,7 +12,6 @@ export function useSocket() {
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin
 
-    // Re-create socket if URL changed (e.g. switched from localhost to tunnel)
     if (socketInstance && socketUrl !== url) {
       socketInstance.disconnect()
       socketInstance = null
@@ -22,12 +21,13 @@ export function useSocket() {
     if (!socketInstance) {
       socketUrl = url
       socketInstance = io(url, {
-        transports: ['polling'],
+        transports: ['websocket'],
         upgrade: false,
         reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionAttempts: 20,
+        reconnectionDelay: 2000,
+        reconnectionAttempts: 15,
         timeout: 20000,
+        forceNew: false,
       })
     }
 
