@@ -20,7 +20,7 @@ const BINGO_ITEMS = [
   'รับเพื่อน ติดตาม หรือพูดคุยกับคนแปลกหน้าโดยไม่ระมัดระวัง',
 ]
 
-export default function BingoCard({ cardOrder, checkedCells, onCheck, disabled }) {
+export default function BingoCard({ cardOrder, checkedCells, cellSelections, onCheck, disabled }) {
   return (
     <div className="w-full max-w-sm mx-auto">
       <div className="grid grid-cols-4 gap-1.5">
@@ -29,6 +29,7 @@ export default function BingoCard({ cardOrder, checkedCells, onCheck, disabled }
             key={pos}
             text={BINGO_ITEMS[origIdx]}
             checked={checkedCells.has(origIdx)}
+            selectedPlayer={cellSelections[origIdx] || null}
             onClick={() => onCheck(origIdx)}
             disabled={disabled}
           />

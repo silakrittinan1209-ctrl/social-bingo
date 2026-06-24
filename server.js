@@ -63,14 +63,22 @@ app.prepare().then(() => {
 
     socket.on('player:check', (data, callback) => {
       try {
-        const { playerId, index } = data
-        const result = handleCheck(playerId, index)
+        const { playerId, index, selectedPlayerId } = data
+        const result = handleCheck(playerId, index, selectedPlayerId)
         if (!result) {
           if (callback) callback({ ok: false })
           return
         }
-        const { player, bingoGained } = result
-        if (callback) callback({ ok: true, checkedCells: [...player.checkedCells] })
+        if (result.error) {
+          if (callback) callback({ ok: false, error: result.error })
+          return
+        }
+        const { player, bingoGained, playerUsage } = result
+        if (callback) callback({
+          ok: true,
+          checkedCells: [...player.checkedCells],
+          playerUsage: playerUsage || {},
+        })
 
         if (bingoGained && bingoGained.length > 0) {
           io.to(`player:${playerId}`).emit('player:bingo', {
