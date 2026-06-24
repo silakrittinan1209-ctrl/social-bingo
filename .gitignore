@@ -1,0 +1,7 @@
+node_modules/
+.next/
+.env.local
+bingo-data.json
+bingo.db
+*.log
+.DS_Store
