@@ -4,29 +4,15 @@ import QRCodeDisplay from '@/components/QRCodeDisplay'
 
 export default function QRPage() {
   const [registerUrl, setRegisterUrl] = useState('')
-  const [isLocalhost, setIsLocalhost] = useState(false)
 
   useEffect(() => {
-    const origin = window.location.origin
-    const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1')
-    setIsLocalhost(isLocal)
-
-    if (!isLocal) {
-      setRegisterUrl(`${origin}/register`)
-      return
-    }
-
-    // On localhost: try to get the public tunnel URL
     fetch('/api/tunnel-url')
       .then((r) => r.json())
       .then((data) => {
-        if (data.url) {
-          setRegisterUrl(`${data.url}/register`)
-        } else {
-          setRegisterUrl(`${origin}/register`)
-        }
+        const base = data.url || window.location.origin
+        setRegisterUrl(`${base}/register`)
       })
-      .catch(() => setRegisterUrl(`${origin}/register`))
+      .catch(() => setRegisterUrl(`${window.location.origin}/register`))
   }, [])
 
   return (
@@ -44,7 +30,7 @@ export default function QRPage() {
           {registerUrl ? (
             <QRCodeDisplay url={registerUrl} size={280} />
           ) : (
-            <div className="w-[280px] h-[280px] flex items-center justify-center text-gray-400">
+            <div className="w-[280px] h-[280px] flex items-center justify-center text-gray-400 text-sm">
               กำลังโหลด...
             </div>
           )}
@@ -55,15 +41,9 @@ export default function QRPage() {
         </p>
 
         {registerUrl && (
-          <p className="text-white/70 text-base mt-3 font-mono bg-black/20 px-4 py-2 rounded-xl break-all">
+          <p className="text-white/70 text-base mt-3 font-mono bg-black/20 px-4 py-2 rounded-xl break-all max-w-md mx-auto">
             {registerUrl}
           </p>
-        )}
-
-        {isLocalhost && registerUrl && registerUrl.includes('localhost') && (
-          <div className="mt-4 bg-yellow-400/90 text-yellow-900 text-sm font-semibold px-4 py-3 rounded-xl max-w-sm mx-auto">
-            ⚠️ กำลังแสดง localhost — เปิดหน้านี้ผ่าน URL สาธารณะเพื่อให้ผู้เล่นสแกนได้
-          </div>
         )}
       </div>
     </div>
