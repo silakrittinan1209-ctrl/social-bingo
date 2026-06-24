@@ -10,8 +10,8 @@ module.exports = {
     },
     {
       name: 'bingo-tunnel',
-      script: 'C:\\Users\\Admin\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\\ngrok.exe',
-      args: 'http 3000 --log stdout --log-format json',
+      script: 'C:\\Program Files (x86)\\cloudflared\\cloudflared.exe',
+      args: 'tunnel --url http://localhost:3000 --logfile C:\\Windows\\Temp\\cf-tunnel.log',
       restart_delay: 5000,
       max_restarts: 10,
     },

@@ -50,7 +50,13 @@ export default function PlayerSelectModal({ currentPlayerId, cellText, playerUsa
             <div className="text-center py-10 text-gray-400 text-sm">กำลังโหลด...</div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-10 text-gray-400 text-sm">
-              {players.length === 0 ? 'ยังไม่มีผู้เล่นในระบบ' : 'ไม่พบผู้เล่นที่ค้นหา'}
+              {players.length === 0 ? (
+                <div>
+                  <div className="text-3xl mb-2">👥</div>
+                  <div className="font-semibold text-gray-500 mb-1">รอผู้เล่นคนอื่น</div>
+                  <div className="text-xs text-gray-400">ต้องมีผู้เล่นอื่นลงทะเบียนก่อน<br/>ถึงจะสามารถเลือกได้</div>
+                </div>
+              ) : 'ไม่พบผู้เล่นที่ค้นหา'}
             </div>
           ) : (
             filtered.map((p) => {
