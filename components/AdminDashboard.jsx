@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useSocket } from '@/hooks/useSocket'
 import QRCodeDisplay from './QRCodeDisplay'
+import TimerDisplay from './TimerDisplay'
 
 const BINGO_ITEMS = [
   'เลื่อนดูโซเชียลเป็นเวลานานเกินความจำเป็น (Doom Scrolling)',
@@ -22,7 +23,7 @@ const BINGO_ITEMS = [
   'รับเพื่อน ติดตาม หรือพูดคุยกับคนแปลกหน้าโดยไม่ระมัดระวัง',
 ]
 
-function formatTime(ts) {
+function formatBingoTime(ts) {
   if (!ts) return '-'
   return new Date(ts).toLocaleTimeString('th-TH', {
     hour: '2-digit',
@@ -52,6 +53,10 @@ export default function AdminDashboard() {
   const [registerUrl, setRegisterUrl] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
 
+  // Timer state
+  const [timer, setTimer] = useState({ running: false, timeLeft: 0, totalTime: 0 })
+  const [timerInput, setTimerInput] = useState({ min: '10', sec: '0' })
+
   useEffect(() => {
     const origin = window.location.origin
     setRegisterUrl(`${origin}/register`)
@@ -61,9 +66,15 @@ export default function AdminDashboard() {
     if (!socket) return
 
     const handleUpdate = (d) => setData(d)
+    const handleTimer = (d) => setTimer(d)
     socket.on('admin:update', handleUpdate)
+    socket.on('timer:update', handleTimer)
+    socket.on('timer:end', () => setTimer((t) => ({ ...t, running: false, timeLeft: 0 })))
 
-    return () => socket.off('admin:update', handleUpdate)
+    return () => {
+      socket.off('admin:update', handleUpdate)
+      socket.off('timer:update', handleTimer)
+    }
   }, [socket])
 
   function handleReset() {
@@ -71,6 +82,17 @@ export default function AdminDashboard() {
     socket.emit('game:reset')
     setShowConfirm(false)
   }
+
+  function handleTimerSet() {
+    if (!socket) return
+    const totalSeconds = (parseInt(timerInput.min) || 0) * 60 + (parseInt(timerInput.sec) || 0)
+    if (totalSeconds <= 0) return
+    socket.emit('timer:set', { totalSeconds })
+  }
+
+  function handleTimerStart() { socket?.emit('timer:start') }
+  function handleTimerPause() { socket?.emit('timer:pause') }
+  function handleTimerReset() { socket?.emit('timer:reset') }
 
   const maxCellCount = data?.topCells?.[0]?.count || 1
 
@@ -100,6 +122,77 @@ export default function AdminDashboard() {
             icon="🎮"
             color="green"
           />
+        </div>
+
+        {/* ── Timer Control ─────────────────────────────────── */}
+        <div className="bg-gray-800 rounded-2xl p-4 mb-6">
+          <h2 className="font-bold mb-3 text-sm text-gray-300">⏱ ตั้งเวลาเล่น</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            {/* Left: set & controls */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="text-xs text-gray-400 mb-1 block">นาที</label>
+                  <input
+                    type="number" min="0" max="120"
+                    value={timerInput.min}
+                    onChange={(e) => setTimerInput((p) => ({ ...p, min: e.target.value }))}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="text-gray-400 font-bold mt-5">:</div>
+                <div className="flex-1">
+                  <label className="text-xs text-gray-400 mb-1 block">วินาที</label>
+                  <input
+                    type="number" min="0" max="59"
+                    value={timerInput.sec}
+                    onChange={(e) => setTimerInput((p) => ({ ...p, sec: e.target.value }))}
+                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <button
+                  onClick={handleTimerSet}
+                  disabled={timer.running}
+                  className="mt-5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs py-2 px-3 rounded-lg font-semibold transition-colors"
+                >
+                  ตั้งค่า
+                </button>
+              </div>
+              <div className="flex gap-2">
+                {!timer.running ? (
+                  <button
+                    onClick={handleTimerStart}
+                    disabled={timer.timeLeft === 0}
+                    className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-sm py-2.5 rounded-xl font-bold transition-colors"
+                  >
+                    ▶ เริ่ม
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleTimerPause}
+                    className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-sm py-2.5 rounded-xl font-bold transition-colors"
+                  >
+                    ⏸ หยุด
+                  </button>
+                )}
+                <button
+                  onClick={handleTimerReset}
+                  className="flex-1 bg-gray-600 hover:bg-gray-500 text-white text-sm py-2.5 rounded-xl font-bold transition-colors"
+                >
+                  ↺ รีเซ็ต
+                </button>
+              </div>
+              <div className="text-xs text-gray-500">
+                ⚡ ทุกหน้าเห็น countdown พร้อมกัน
+              </div>
+            </div>
+            {/* Right: live display */}
+            <TimerDisplay
+              timeLeft={timer.timeLeft}
+              totalTime={timer.totalTime}
+              running={timer.running}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -191,7 +284,7 @@ export default function AdminDashboard() {
                         </div>
                       )}
                     </td>
-                    <td className="py-2 text-right text-xs text-gray-400">{formatTime(p.bingoTime)}</td>
+                    <td className="py-2 text-right text-xs text-gray-400">{formatBingoTime(p.bingoTime)}</td>
                   </tr>
                 ))}
                 {(!data?.players || data.players.length === 0) && (

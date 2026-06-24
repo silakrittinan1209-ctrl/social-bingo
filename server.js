@@ -10,9 +10,10 @@ const {
   resetGame,
   getAdminData,
   getLeaderboardData,
+  getGameState,
+  BINGO_ITEMS,
 } = gameStateModule
 
-// Expose to Next.js API routes (different webpack bundle, same Node process)
 global._bingoGame = gameStateModule
 
 const dev = process.env.NODE_ENV !== 'production'
@@ -22,6 +23,31 @@ const port = parseInt(process.env.PORT || '3000', 10)
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
 
+// ── Pending confirmations ────────────────────────────────────────
+const pendingConfirmations = new Map()
+// confirmId -> { fromPlayerId, toPlayerId, cellIndex, timeoutId }
+
+function genId() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
+
+// ── Game timer ───────────────────────────────────────────────────
+const timerState = {
+  running: false,
+  timeLeft: 0,
+  totalTime: 0,
+  intervalId: null,
+}
+
+function broadcastTimer(io) {
+  io.emit('timer:update', {
+    running: timerState.running,
+    timeLeft: timerState.timeLeft,
+    totalTime: timerState.totalTime,
+  })
+}
+
+// ────────────────────────────────────────────────────────────────
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url, true)
@@ -36,66 +62,186 @@ app.prepare().then(() => {
   })
 
   global.io = io
-
   initGameState()
 
   io.on('connection', (socket) => {
     console.log('Client connected:', socket.id)
 
+    // Send current state on connect
     socket.emit('admin:update', getAdminData())
     socket.emit('leaderboard:update', getLeaderboardData())
+    socket.emit('timer:update', {
+      running: timerState.running,
+      timeLeft: timerState.timeLeft,
+      totalTime: timerState.totalTime,
+    })
 
+    // ── Player join ──────────────────────────────────────────────
     socket.on('player:join', (data, callback) => {
       try {
         const { nickname, village } = data
         if (!nickname || !village) {
-          if (callback) callback({ error: 'Missing nickname or village' })
-          return
+          callback?.({ error: 'Missing nickname or village' }); return
         }
         const player = handleJoin(socket.id, { nickname, village })
         socket.join(`player:${player.id}`)
-        if (callback) callback({ playerId: player.id, cardOrder: player.cardOrder })
+        callback?.({ playerId: player.id, cardOrder: player.cardOrder })
       } catch (e) {
         console.error('player:join error:', e)
-        if (callback) callback({ error: 'Server error' })
+        callback?.({ error: 'Server error' })
       }
     })
 
-    socket.on('player:check', (data, callback) => {
+    // ── Confirm: Player A requests confirmation from Player B ────
+    socket.on('confirm:request', (data, callback) => {
       try {
-        const { playerId, index, selectedPlayerId } = data
-        const result = handleCheck(playerId, index, selectedPlayerId)
-        if (!result) {
-          if (callback) callback({ ok: false })
-          return
+        const { fromPlayerId, toPlayerId, cellIndex } = data
+        const state = getGameState()
+        const fromPlayer = state.players.get(fromPlayerId)
+        const toPlayer = state.players.get(toPlayerId)
+
+        if (!fromPlayer || !toPlayer) {
+          callback?.({ ok: false, error: 'player_not_found' }); return
         }
-        if (result.error) {
-          if (callback) callback({ ok: false, error: result.error })
-          return
+        if (fromPlayer.checkedCells.has(cellIndex)) {
+          callback?.({ ok: false, error: 'already_checked' }); return
         }
-        const { player, bingoGained, playerUsage } = result
-        if (callback) callback({
-          ok: true,
-          checkedCells: [...player.checkedCells],
-          playerUsage: playerUsage || {},
+
+        // Check usage limit before sending request
+        const currentUsage = fromPlayer.playerUsageOnCard.get(toPlayerId) || 0
+        if (currentUsage >= 2) {
+          callback?.({ ok: false, error: 'player_used_max' }); return
+        }
+
+        const confirmId = genId()
+        const TIMEOUT_SEC = 30
+
+        const timeoutId = setTimeout(() => {
+          pendingConfirmations.delete(confirmId)
+          io.to(`player:${fromPlayerId}`).emit('confirm:result', {
+            confirmId, cellIndex, accepted: false, timeout: true,
+          })
+        }, TIMEOUT_SEC * 1000)
+
+        pendingConfirmations.set(confirmId, { fromPlayerId, toPlayerId, cellIndex, timeoutId })
+
+        // Notify Player B
+        io.to(`player:${toPlayerId}`).emit('confirm:incoming', {
+          confirmId,
+          fromNickname: fromPlayer.nickname,
+          fromVillage: fromPlayer.village,
+          cellIndex,
+          cellText: BINGO_ITEMS[cellIndex],
+          timeoutSec: TIMEOUT_SEC,
         })
 
-        if (bingoGained && bingoGained.length > 0) {
-          io.to(`player:${playerId}`).emit('player:bingo', {
-            playerId,
-            bingoTypes: player.bingoTypes,
-            newTypes: bingoGained,
-          })
-        }
+        callback?.({ ok: true, confirmId })
       } catch (e) {
-        console.error('player:check error:', e)
-        if (callback) callback({ ok: false })
+        console.error('confirm:request error:', e)
+        callback?.({ ok: false, error: 'server_error' })
       }
     })
 
+    // ── Confirm: Player B responds ───────────────────────────────
+    socket.on('confirm:respond', (data, callback) => {
+      try {
+        const { confirmId, accepted } = data
+        const pending = pendingConfirmations.get(confirmId)
+        if (!pending) {
+          callback?.({ ok: false, error: 'not_found' }); return
+        }
+
+        clearTimeout(pending.timeoutId)
+        pendingConfirmations.delete(confirmId)
+
+        if (accepted) {
+          const result = handleCheck(pending.fromPlayerId, pending.cellIndex, pending.toPlayerId)
+          if (result && !result.error) {
+            const { player, bingoGained, playerUsage } = result
+            io.to(`player:${pending.fromPlayerId}`).emit('confirm:result', {
+              confirmId, cellIndex: pending.cellIndex, accepted: true,
+              checkedCells: [...player.checkedCells],
+              playerUsage: playerUsage || {},
+            })
+            if (bingoGained && bingoGained.length > 0) {
+              io.to(`player:${pending.fromPlayerId}`).emit('player:bingo', {
+                playerId: pending.fromPlayerId,
+                bingoTypes: player.bingoTypes,
+                newTypes: bingoGained,
+              })
+            }
+          } else {
+            io.to(`player:${pending.fromPlayerId}`).emit('confirm:result', {
+              confirmId, cellIndex: pending.cellIndex, accepted: false,
+              error: result?.error || 'check_failed',
+            })
+          }
+        } else {
+          io.to(`player:${pending.fromPlayerId}`).emit('confirm:result', {
+            confirmId, cellIndex: pending.cellIndex, accepted: false,
+          })
+        }
+        callback?.({ ok: true })
+      } catch (e) {
+        console.error('confirm:respond error:', e)
+        callback?.({ ok: false })
+      }
+    })
+
+    // ── Timer controls (admin) ───────────────────────────────────
+    socket.on('timer:set', ({ totalSeconds }) => {
+      if (timerState.intervalId) clearInterval(timerState.intervalId)
+      timerState.totalTime = Math.max(0, Math.min(totalSeconds, 7200))
+      timerState.timeLeft = timerState.totalTime
+      timerState.running = false
+      timerState.intervalId = null
+      broadcastTimer(io)
+    })
+
+    socket.on('timer:start', () => {
+      if (timerState.running || timerState.timeLeft === 0) return
+      timerState.running = true
+      timerState.intervalId = setInterval(() => {
+        timerState.timeLeft = Math.max(0, timerState.timeLeft - 1)
+        broadcastTimer(io)
+        if (timerState.timeLeft === 0) {
+          clearInterval(timerState.intervalId)
+          timerState.intervalId = null
+          timerState.running = false
+          io.emit('timer:end')
+        }
+      }, 1000)
+      broadcastTimer(io)
+    })
+
+    socket.on('timer:pause', () => {
+      if (!timerState.running) return
+      clearInterval(timerState.intervalId)
+      timerState.intervalId = null
+      timerState.running = false
+      broadcastTimer(io)
+    })
+
+    socket.on('timer:reset', () => {
+      clearInterval(timerState.intervalId)
+      timerState.intervalId = null
+      timerState.timeLeft = timerState.totalTime
+      timerState.running = false
+      broadcastTimer(io)
+    })
+
+    // ── Game reset ───────────────────────────────────────────────
     socket.on('game:reset', () => {
+      // Clear all pending confirmations
+      pendingConfirmations.forEach((p) => clearTimeout(p.timeoutId))
+      pendingConfirmations.clear()
+      // Clear timer
+      clearInterval(timerState.intervalId)
+      Object.assign(timerState, { running: false, timeLeft: 0, totalTime: 0, intervalId: null })
+
       resetGame()
       io.emit('game:reset')
+      broadcastTimer(io)
       console.log('Game reset by', socket.id)
     })
 
