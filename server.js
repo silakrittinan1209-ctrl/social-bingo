@@ -251,6 +251,20 @@ app.prepare().then(() => {
       console.log('Game reset by', socket.id)
     })
 
+    // ── Player rejoin (reconnect) ────────────────────────────────
+    socket.on('player:rejoin', ({ playerId }, callback) => {
+      try {
+        const state = getGameState()
+        const player = state.players.get(playerId)
+        if (!player) { callback?.({ ok: false, error: 'not_found' }); return }
+        player.socketId = socket.id
+        socket.join(`player:${playerId}`)
+        callback?.({ ok: true })
+      } catch (e) {
+        callback?.({ ok: false, error: e.message })
+      }
+    })
+
     // ── Players list (for modal) ─────────────────────────────────
     socket.on('players:request', (callback) => {
       try {

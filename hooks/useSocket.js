@@ -21,19 +21,29 @@ export function useSocket() {
     if (!socketInstance) {
       socketUrl = url
       socketInstance = io(url, {
-        transports: ['websocket'],
-        upgrade: false,
+        transports: ['polling', 'websocket'],
+        upgrade: true,
         reconnection: true,
-        reconnectionDelay: 2000,
-        reconnectionAttempts: 15,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 20,
         timeout: 20000,
-        forceNew: false,
       })
     }
 
     socketRef.current = socketInstance
 
-    const onConnect = () => setIsConnected(true)
+    const onConnect = () => {
+      setIsConnected(true)
+      // Re-join player room after reconnect
+      if (typeof window !== 'undefined') {
+        const playerId = sessionStorage.getItem('playerId')
+        if (playerId) {
+          socketInstance.emit('player:rejoin', { playerId }, (res) => {
+            if (!res?.ok) console.warn('rejoin failed:', res)
+          })
+        }
+      }
+    }
     const onDisconnect = () => setIsConnected(false)
 
     socketInstance.on('connect', onConnect)
