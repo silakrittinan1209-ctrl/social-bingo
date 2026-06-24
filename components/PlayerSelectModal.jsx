@@ -1,20 +1,21 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useSocket } from '@/hooks/useSocket'
 
 export default function PlayerSelectModal({ currentPlayerId, cellText, playerUsage, onSelect, onClose }) {
+  const { socket } = useSocket()
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    fetch('/api/players')
-      .then((r) => r.json())
-      .then((data) => {
-        setPlayers((data.players || []).filter((p) => p.id !== currentPlayerId))
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [currentPlayerId])
+    if (!socket) return
+    socket.emit('players:request', (res) => {
+      const list = (res?.players || []).filter((p) => p.id !== currentPlayerId)
+      setPlayers(list)
+      setLoading(false)
+    })
+  }, [socket, currentPlayerId])
 
   const filtered = players.filter(
     (p) =>
@@ -73,19 +74,14 @@ export default function PlayerSelectModal({ currentPlayerId, cellText, playerUsa
                       : 'hover:bg-indigo-50 active:scale-95 cursor-pointer'
                     }`}
                 >
-                  {/* Avatar */}
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0
                     ${disabled ? 'bg-gray-200 text-gray-400' : 'bg-indigo-100 text-indigo-600'}`}>
                     {p.nickname.charAt(0)}
                   </div>
-
-                  {/* Name */}
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm text-gray-800 truncate">{p.nickname}</div>
                     <div className="text-xs text-gray-400 truncate">{p.village}</div>
                   </div>
-
-                  {/* Usage badge */}
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0
                     ${usageCount === 0 ? 'bg-green-100 text-green-600'
                     : usageCount === 1 ? 'bg-yellow-100 text-yellow-700'

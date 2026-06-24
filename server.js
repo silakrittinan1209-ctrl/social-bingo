@@ -245,6 +245,20 @@ app.prepare().then(() => {
       console.log('Game reset by', socket.id)
     })
 
+    // ── Players list (for modal) ─────────────────────────────────
+    socket.on('players:request', (callback) => {
+      try {
+        const state = getGameState()
+        const players = []
+        state.players.forEach((p) => {
+          players.push({ id: p.id, nickname: p.nickname, village: p.village })
+        })
+        callback?.({ players })
+      } catch (e) {
+        callback?.({ players: [] })
+      }
+    })
+
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id)
     })
