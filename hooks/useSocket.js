@@ -12,10 +12,12 @@ export function useSocket() {
     if (!socketInstance) {
       const url = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin
       socketInstance = io(url, {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
+        upgrade: true,
         reconnection: true,
         reconnectionDelay: 1000,
-        reconnectionAttempts: 10,
+        reconnectionAttempts: 20,
+        timeout: 20000,
       })
     }
 
