@@ -11,7 +11,7 @@ module.exports = {
     {
       name: 'bingo-tunnel',
       script: 'C:\\Users\\Admin\\AppData\\Local\\Microsoft\\WinGet\\Links\\ngrok.exe',
-      args: 'http 3000',
+      args: 'http --domain=maturing-repeater-proofing.ngrok-free.dev 3000',
       restart_delay: 5000,
       max_restarts: 10,
     },
