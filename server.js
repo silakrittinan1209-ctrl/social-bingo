@@ -70,6 +70,11 @@ app.prepare().then(() => {
   global.io = io
   initGameState()
 
+  // Add ngrok-skip-browser-warning header to all socket.io responses
+  io.engine.on('headers', (headers) => {
+    headers['ngrok-skip-browser-warning'] = '1'
+  })
+
   io.on('connection', (socket) => {
     console.log('Client connected:', socket.id)
 

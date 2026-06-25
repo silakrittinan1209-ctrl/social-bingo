@@ -27,6 +27,9 @@ export function useSocket() {
         reconnectionDelay: 1000,
         reconnectionAttempts: 20,
         timeout: 20000,
+        extraHeaders: {
+          'ngrok-skip-browser-warning': '1',
+        },
       })
     }
 

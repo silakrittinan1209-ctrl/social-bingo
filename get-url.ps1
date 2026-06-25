@@ -2,14 +2,13 @@
 Write-Host ""
 Write-Host "=== Social Bingo URLs ===" -ForegroundColor Cyan
 
-# ดึง URL จาก cloudflared log
-$cfLog = "C:\Windows\Temp\cf-tunnel.log"
+# ดึง URL จาก ngrok API
 $url = $null
-if (Test-Path $cfLog) {
-    $match = Get-Content $cfLog -ErrorAction SilentlyContinue | Select-String "trycloudflare.com" | Select-Object -Last 1
-    if ($match -match '"(https://[^"]+trycloudflare\.com)"') {
-        $url = $Matches[1]
-    }
+try {
+    $resp = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
+    $url = $resp.tunnels | Where-Object { $_.proto -eq "https" } | Select-Object -First 1 -ExpandProperty public_url
+} catch {
+    # ngrok ยังไม่พร้อม
 }
 
 if ($url) {
@@ -22,7 +21,7 @@ if ($url) {
     Write-Host "Leaderboard: $url/leaderboard" -ForegroundColor Yellow
 } else {
     Write-Host "Local URL  : http://localhost:3000" -ForegroundColor Yellow
-    Write-Host "(cloudflared กำลังเริ่ม หรือ log ไม่พบ)" -ForegroundColor Gray
+    Write-Host "(ngrok กำลังเริ่ม หรือยังไม่พร้อม)" -ForegroundColor Gray
 }
 
 Write-Host ""
