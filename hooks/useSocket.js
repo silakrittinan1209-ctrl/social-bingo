@@ -21,8 +21,8 @@ export function useSocket() {
     if (!socketInstance) {
       socketUrl = url
       socketInstance = io(url, {
-        transports: ['polling', 'websocket'],
-        upgrade: true,
+        transports: ['polling'],
+        upgrade: false,
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionAttempts: 20,
