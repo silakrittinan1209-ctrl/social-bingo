@@ -11,12 +11,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    const existingId = sessionStorage.getItem('playerId')
-    if (existingId) {
-      router.replace('/game')
-    }
-  }, [router])
+  // Allow users to register without auto-redirecting if they already have playerId
+  // This enables re-registration if needed
 
   async function handleSubmit(e) {
     e.preventDefault()

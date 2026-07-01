@@ -109,7 +109,7 @@ export default function GamePage() {
       } else if (timeout) {
         showToast(`⏱ หมดเวลา — ${outgoing?.selectedPlayer?.nickname || 'ผู้เล่น'} ไม่ตอบ`, 'warning')
       } else if (error === 'player_used_max') {
-        showToast('ชื่อนี้ถูกใช้ครบ 2 ช่องแล้ว', 'error')
+        showToast('ชื่อนี้ถูกใช้ครบ 1 ช่องแล้ว', 'error')
       } else {
         showToast(`❌ ${outgoing?.selectedPlayer?.nickname || 'ผู้เล่น'} ปฏิเสธ`, 'error')
       }
@@ -145,6 +145,14 @@ export default function GamePage() {
   const handlePlayerSelect = useCallback((selectedPlayer) => {
     if (!socket || !playerId || pendingCell === null) return
     const cellIndex = pendingCell
+    const alreadyPending = Object.values(outgoingRef.current).some(
+      (outgoing) => outgoing.selectedPlayer?.id === selectedPlayer.id
+    )
+    if (alreadyPending) {
+      showToast('ผู้เล่นนี้กำลังรอการยืนยันอยู่แล้ว', 'warning')
+      setPendingCell(null)
+      return
+    }
     setPendingCell(null)
 
     socket.emit('confirm:request', { fromPlayerId: playerId, toPlayerId: selectedPlayer.id, cellIndex }, (res) => {
@@ -153,7 +161,7 @@ export default function GamePage() {
         outgoingRef.current[cellIndex] = { confirmId: res.confirmId, selectedPlayer }
         showToast(`⏳ รอ ${selectedPlayer.nickname} ยืนยัน...`, 'info')
       } else if (res?.error === 'player_used_max') {
-        showToast('ชื่อนี้ถูกใช้ครบ 2 ช่องแล้ว', 'error')
+        showToast('ชื่อนี้ถูกใช้ครบ 1 ช่องแล้ว', 'error')
       } else {
         showToast('เกิดข้อผิดพลาด ลองใหม่', 'error')
       }
@@ -254,7 +262,7 @@ export default function GamePage() {
             <li>• กดช่อง → เลือกชื่อเพื่อนที่มีพฤติกรรมนั้น</li>
             <li>• <span className="text-yellow-600 font-semibold">⏳ เหลือง</span> = รอเพื่อนยืนยัน (30 วิ)</li>
             <li>• <span className="text-indigo-600 font-semibold">■ น้ำเงิน</span> = ยืนยันแล้ว</li>
-            <li>• ชื่อคนเดียวกันใช้ได้สูงสุด <strong>2 ช่อง</strong></li>
+            <li>• ชื่อคนเดียวกันใช้ได้สูงสุด <strong>1 ช่อง</strong></li>
           </ul>
         </div>
       </div>
@@ -273,6 +281,7 @@ export default function GamePage() {
           currentPlayerId={playerId}
           cellText={BINGO_ITEMS[pendingCell]}
           playerUsage={playerUsage}
+          pendingPlayerIds={Object.values(outgoingRef.current).map((o) => o.selectedPlayer?.id).filter(Boolean)}
           onSelect={handlePlayerSelect}
           onClose={() => setPendingCell(null)}
         />

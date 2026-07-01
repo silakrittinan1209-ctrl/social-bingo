@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useSocket } from '@/hooks/useSocket'
 
-export default function PlayerSelectModal({ currentPlayerId, cellText, playerUsage, onSelect, onClose }) {
+export default function PlayerSelectModal({ currentPlayerId, cellText, playerUsage, pendingPlayerIds = [], onSelect, onClose }) {
   const { socket } = useSocket()
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -62,7 +62,8 @@ export default function PlayerSelectModal({ currentPlayerId, cellText, playerUsa
           ) : (
             filtered.map((p) => {
               const usageCount = playerUsage[p.id] || 0
-              const disabled = usageCount >= 2
+              const isPending = pendingPlayerIds.includes(p.id)
+              const disabled = usageCount >= 1 || isPending
               return (
                 <button
                   key={p.id}
@@ -84,10 +85,14 @@ export default function PlayerSelectModal({ currentPlayerId, cellText, playerUsa
                   </div>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0
                     ${usageCount === 0 ? 'bg-green-100 text-green-600'
-                    : usageCount === 1 ? 'bg-yellow-100 text-yellow-700'
                     : 'bg-red-100 text-red-500'}`}>
-                    {usageCount}/2
+                    {usageCount}/1
                   </span>
+                  {isPending && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0 bg-yellow-100 text-yellow-700">
+                      รอ
+                    </span>
+                  )}
                 </button>
               )
             })
@@ -96,7 +101,7 @@ export default function PlayerSelectModal({ currentPlayerId, cellText, playerUsa
 
         <div className="p-3 border-t border-gray-100 shrink-0">
           <p className="text-xs text-gray-400 text-center">
-            ชื่อ 1 คน ใช้ได้สูงสุด 2 ช่อง • {filtered.length} คนในระบบ
+            ชื่อ 1 คน ใช้ได้สูงสุด 1 ช่อง • {filtered.length} คนในระบบ
           </p>
         </div>
       </div>

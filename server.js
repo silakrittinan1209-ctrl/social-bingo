@@ -120,7 +120,10 @@ app.prepare().then(() => {
 
         // Check usage limit before sending request
         const currentUsage = fromPlayer.playerUsageOnCard.get(toPlayerId) || 0
-        if (currentUsage >= 2) {
+        const pendingUsage = Array.from(pendingConfirmations.values()).filter(
+          (p) => p.fromPlayerId === fromPlayerId && p.toPlayerId === toPlayerId
+        ).length
+        if (currentUsage + pendingUsage >= 1) {
           callback?.({ ok: false, error: 'player_used_max' }); return
         }
 
