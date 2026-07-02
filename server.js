@@ -8,6 +8,8 @@ const {
   handleJoin,
   handleCheck,
   resetGame,
+  setBingoPlayerLimit,
+  setGameStarted,
   getAdminData,
   getLeaderboardData,
   getGameState,
@@ -81,6 +83,11 @@ app.prepare().then(() => {
     // Send current state on connect
     socket.emit('admin:update', getAdminData())
     socket.emit('leaderboard:update', getLeaderboardData())
+    socket.emit('game:state', {
+      gameStarted: getGameState().gameStarted,
+      gameEnded: getGameState().gameEnded,
+      bingoPlayerLimit: getGameState().bingoPlayerLimit,
+    })
     socket.emit('timer:update', {
       running: timerState.running,
       timeLeft: timerState.timeLeft,
@@ -94,7 +101,11 @@ app.prepare().then(() => {
         if (!nickname || !village) {
           callback?.({ error: 'Missing nickname or village' }); return
         }
-        const player = handleJoin(socket.id, { nickname, village })
+        const playerResult = handleJoin(socket.id, { nickname, village })
+        if (playerResult?.error) {
+          callback?.({ error: playerResult.error }); return
+        }
+        const player = playerResult
         socket.join(`player:${player.id}`)
         callback?.({ playerId: player.id, cardOrder: player.cardOrder })
       } catch (e) {
@@ -199,6 +210,31 @@ app.prepare().then(() => {
       } catch (e) {
         console.error('confirm:respond error:', e)
         callback?.({ ok: false })
+      }
+    })
+
+    socket.on('game:bingo-limit', ({ limit }, callback) => {
+      try {
+        setBingoPlayerLimit(limit)
+        io.emit('admin:update', getAdminData())
+        io.emit('leaderboard:update', getLeaderboardData())
+        callback?.({ ok: true, bingoPlayerLimit: getGameState().bingoPlayerLimit })
+      } catch (e) {
+        console.error('game:bingo-limit error:', e)
+        callback?.({ ok: false, error: 'server_error' })
+      }
+    })
+
+    socket.on('game:start', (callback) => {
+      try {
+        setGameStarted(true)
+        io.emit('game:started', { gameStarted: true })
+        io.emit('admin:update', getAdminData())
+        io.emit('leaderboard:update', getLeaderboardData())
+        callback?.({ ok: true, gameStarted: true })
+      } catch (e) {
+        console.error('game:start error:', e)
+        callback?.({ ok: false, error: 'server_error' })
       }
     })
 

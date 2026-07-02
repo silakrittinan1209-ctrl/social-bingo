@@ -56,11 +56,18 @@ export default function AdminDashboard() {
   // Timer state
   const [timer, setTimer] = useState({ running: false, timeLeft: 0, totalTime: 0 })
   const [timerInput, setTimerInput] = useState({ min: '10', sec: '0' })
+  const [bingoLimitInput, setBingoLimitInput] = useState('0')
 
   useEffect(() => {
     const origin = window.location.origin
     setRegisterUrl(`${origin}/register`)
   }, [])
+
+  useEffect(() => {
+    if (data?.bingoPlayerLimit !== undefined) {
+      setBingoLimitInput(String(data.bingoPlayerLimit))
+    }
+  }, [data?.bingoPlayerLimit])
 
   useEffect(() => {
     if (!socket) return
@@ -88,6 +95,21 @@ export default function AdminDashboard() {
     const totalSeconds = (parseInt(timerInput.min) || 0) * 60 + (parseInt(timerInput.sec) || 0)
     if (totalSeconds <= 0) return
     socket.emit('timer:set', { totalSeconds })
+  }
+
+  function handleBingoLimitSet() {
+    if (!socket) return
+    const limit = parseInt(bingoLimitInput, 10) || 0
+    socket.emit('game:bingo-limit', { limit }, (res) => {
+      if (res?.ok) setBingoLimitInput(String(res.bingoPlayerLimit || 0))
+    })
+  }
+
+  function handleGameStart() {
+    if (!socket) return
+    socket.emit('game:start', (res) => {
+      if (res?.ok) setData((prev) => prev ? { ...prev, gameStarted: true } : prev)
+    })
   }
 
   function handleTimerStart() { socket?.emit('timer:start') }
@@ -122,6 +144,45 @@ export default function AdminDashboard() {
             icon="🎮"
             color="green"
           />
+        </div>
+
+        {/* ── Bingo target control ───────────────────────────── */}
+        <div className="bg-gray-800 rounded-2xl p-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-sm text-gray-300">🎯 จำนวนผู้เล่นที่บิงโกได้</h2>
+            <button
+              onClick={handleGameStart}
+              disabled={data?.gameStarted}
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm py-2 px-3 rounded-lg font-semibold transition-colors"
+            >
+              {data?.gameStarted ? 'กำลังเล่น' : 'เริ่มเกม'}
+            </button>
+          </div>
+          <div className="flex flex-col md:flex-row gap-3 items-start md:items-end">
+            <div className="flex-1 w-full">
+              <label className="text-xs text-gray-400 mb-1 block">จำนวนผู้เล่น</label>
+              <input
+                type="number" min="0"
+                value={bingoLimitInput}
+                onChange={(e) => setBingoLimitInput(e.target.value)}
+                className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+            <button
+              onClick={handleBingoLimitSet}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm py-2 px-4 rounded-lg font-semibold transition-colors"
+            >
+              ตั้งค่า
+            </button>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            {data?.gameStarted
+              ? (data?.gameEnded ? 'เกมถูกจบแล้วตามเกณฑ์นี้' : 'เกมกำลังเปิดให้ผู้เล่นเล่นอยู่')
+              : 'ยังไม่เริ่มเกม ผู้เล่นจะไม่สามารถเข้าร่วมเล่นได้จนกว่าจะกดเริ่มเกม'}
+            {data?.bingoPlayerLimit > 0 && data?.gameStarted && !data?.gameEnded && (
+              <span> • เกมจะจบอัตโนมัติเมื่อมีผู้เล่นได้ Bingo แล้ว {data.bingoPlayerLimit} คน</span>
+            )}
+          </div>
         </div>
 
         {/* ── Timer Control ─────────────────────────────────── */}

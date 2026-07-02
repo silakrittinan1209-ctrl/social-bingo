@@ -10,6 +10,25 @@ export default function RegisterPage() {
   const [village, setVillage] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [gameStarted, setGameStarted] = useState(false)
+
+  useEffect(() => {
+    if (!socket) return
+
+    const handleGameState = (data) => {
+      setGameStarted(Boolean(data?.gameStarted))
+    }
+
+    socket.on('game:state', handleGameState)
+
+    const handleGameStarted = () => setGameStarted(true)
+    socket.on('game:started', handleGameStarted)
+
+    return () => {
+      socket.off('game:state', handleGameState)
+      socket.off('game:started', handleGameStarted)
+    }
+  }, [socket])
 
   // Allow users to register without auto-redirecting if they already have playerId
   // This enables re-registration if needed
@@ -98,13 +117,18 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-400' : 'bg-red-400 animate-pulse'
-              }`}
-            />
-            {isConnected ? 'เชื่อมต่อแล้ว' : 'กำลังเชื่อมต่อ...'}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  isConnected ? 'bg-green-400' : 'bg-red-400 animate-pulse'
+                }`}
+              />
+              {isConnected ? 'เชื่อมต่อแล้ว' : 'กำลังเชื่อมต่อ...'}
+            </div>
+            <div className="mt-1 font-medium text-gray-700">
+              {gameStarted ? 'เกมเริ่มแล้ว คุณสามารถเล่นได้ทันที' : 'รอแอดมินกดเริ่มเกมก่อน'}
+            </div>
           </div>
 
           <button

@@ -55,7 +55,9 @@ export default function GamePage() {
 
   // timer state
   const [timer, setTimer] = useState({ running: false, timeLeft: 0, totalTime: 0 })
+  const [gameStarted, setGameStarted] = useState(false)
   const [gameEnded, setGameEnded] = useState(false)
+  const [gameEndedReason, setGameEndedReason] = useState(null)
 
   function showToast(msg, type = 'info') {
     setToast({ msg, type })
@@ -86,6 +88,25 @@ export default function GamePage() {
     }
 
     const onReset = () => { sessionStorage.clear(); router.replace('/register') }
+    const onGameState = (data) => {
+      setGameStarted(Boolean(data?.gameStarted))
+      setGameEnded(Boolean(data?.gameEnded))
+      if (data?.gameEnded) {
+        setGameEndedReason('ถึงจำนวนผู้เล่นที่กำหนดไว้')
+      }
+    }
+    const onGameStarted = () => {
+      setGameStarted(true)
+      setGameEnded(false)
+      setGameEndedReason(null)
+      showToast('🎮 เกมเริ่มแล้ว คุณสามารถเล่นได้ทันที', 'success')
+    }
+    const onGameEnd = (data) => {
+      setGameEnded(true)
+      setGameEndedReason(data?.reason === 'bingo_limit' ? 'ถึงจำนวนผู้เล่นที่กำหนดไว้' : 'หมดเวลาแล้ว')
+      setTimer((t) => ({ ...t, running: false, timeLeft: 0 }))
+      showToast('🏁 เกมจบแล้ว', 'warning')
+    }
 
     // Incoming confirmation request (Player B)
     const onIncoming = (data) => setIncomingRequest(data)
@@ -120,6 +141,9 @@ export default function GamePage() {
 
     socket.on('player:bingo', onBingo)
     socket.on('game:reset', onReset)
+    socket.on('game:state', onGameState)
+    socket.on('game:started', onGameStarted)
+    socket.on('game:end', onGameEnd)
     socket.on('confirm:incoming', onIncoming)
     socket.on('confirm:result', onResult)
     socket.on('timer:update', onTimerUpdate)
@@ -128,6 +152,9 @@ export default function GamePage() {
     return () => {
       socket.off('player:bingo', onBingo)
       socket.off('game:reset', onReset)
+      socket.off('game:state', onGameState)
+      socket.off('game:started', onGameStarted)
+      socket.off('game:end', onGameEnd)
       socket.off('confirm:incoming', onIncoming)
       socket.off('confirm:result', onResult)
       socket.off('timer:update', onTimerUpdate)
@@ -137,13 +164,13 @@ export default function GamePage() {
 
   // Cell clicked → open player pick modal
   const handleCellClick = useCallback((origIdx) => {
-    if (!isConnected || checkedCells.has(origIdx) || pendingCells.has(origIdx)) return
+    if (!isConnected || !gameStarted || gameEnded || checkedCells.has(origIdx) || pendingCells.has(origIdx)) return
     setPendingCell(origIdx)
-  }, [isConnected, checkedCells, pendingCells])
+  }, [isConnected, gameStarted, gameEnded, checkedCells, pendingCells])
 
   // Player selected → send confirm:request
   const handlePlayerSelect = useCallback((selectedPlayer) => {
-    if (!socket || !playerId || pendingCell === null) return
+    if (!socket || !playerId || !gameStarted || gameEnded || pendingCell === null) return
     const cellIndex = pendingCell
     const alreadyPending = Object.values(outgoingRef.current).some(
       (outgoing) => outgoing.selectedPlayer?.id === selectedPlayer.id
@@ -182,6 +209,7 @@ export default function GamePage() {
   }
 
   const hasFullhouse = bingoTypes.includes('fullhouse')
+  const gameplayLocked = !gameStarted || gameEnded
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 pb-8">
@@ -224,9 +252,15 @@ export default function GamePage() {
 
       <div className="max-w-sm mx-auto px-3 pt-4">
         {/* Game ended banner */}
+        {!gameStarted && !gameEnded && (
+          <div className="mb-3 bg-amber-500 rounded-2xl p-3 text-center text-white font-black text-lg shadow-lg">
+            ⏳ รอแอดมินกดเริ่มเกมก่อน
+          </div>
+        )}
+
         {gameEnded && (
           <div className="mb-3 bg-red-500 rounded-2xl p-3 text-center text-white font-black text-lg shadow-lg">
-            ⏹ หมดเวลาแล้ว!
+            ⏹ {gameEndedReason === 'ถึงจำนวนผู้เล่นที่กำหนดไว้' ? 'เกมจบแล้ว! ถึงจำนวนผู้เล่นที่กำหนดไว้' : 'หมดเวลาแล้ว!'}
           </div>
         )}
 
@@ -239,7 +273,7 @@ export default function GamePage() {
 
         <div className="text-center mb-3">
           <h2 className="text-sm font-semibold text-gray-600">
-            กดช่อง → เลือกชื่อเพื่อน → รอยืนยัน
+            {gameplayLocked ? 'รอแอดมินกดเริ่มเกมเพื่อเริ่มเล่น' : 'กดช่อง → เลือกชื่อเพื่อน → รอยืนยัน'}
           </h2>
           <div className="flex items-center justify-center gap-2 mt-1">
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400 animate-pulse'}`} />
@@ -253,7 +287,7 @@ export default function GamePage() {
           pendingCells={pendingCells}
           cellSelections={cellSelections}
           onCheck={handleCellClick}
-          disabled={!isConnected || gameEnded}
+          disabled={!isConnected || gameplayLocked}
         />
 
         <div className="mt-4 bg-white rounded-2xl p-4 shadow-sm">
